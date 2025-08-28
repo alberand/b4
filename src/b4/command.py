@@ -386,6 +386,8 @@ def setup_parser() -> argparse.ArgumentParser:
     sp_send.add_argument('--cc', nargs='+', metavar='ADDR', help='Addresses to add to the Cc: list')
     sp_send.add_argument('--in-reply-to', metavar='IDENTIFIER',
                          help='Send patchset in reply to a message')
+    sp_send.add_argument('--branch', metavar='BRANCH',
+                         help='Use this this branch to work on')
     sp_send.add_argument('--not-me-too', action='store_true', default=False,
                          help='Remove yourself from the To: or Cc: list')
     sp_send.add_argument('--resend', metavar='vN', nargs='?', const='latest',

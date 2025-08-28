@@ -1857,10 +1857,13 @@ def cmd_send(cmdargs: argparse.Namespace) -> None:
         auth_verify(cmdargs)
         return
 
-    mybranch = b4.git_get_current_branch()
-    if mybranch is None:
-        logger.critical('CRITICAL: Not currently on a branch, unable to send')
-        sys.exit(1)
+    if cmdargs.branch:
+        mybranch = cmdargs.branch
+    else:
+        mybranch = b4.git_get_current_branch()
+        if mybranch is None:
+            logger.critical('CRITICAL: Not currently on a branch, unable to send')
+            sys.exit(1)
 
     is_prep_branch(mustbe=True)
 
@@ -1868,7 +1871,7 @@ def cmd_send(cmdargs: argparse.Namespace) -> None:
 
     tag_msg = None
     cl_msgid = None
-    _, tracking = load_cover(strip_comments=True)
+    _, tracking = load_cover(strip_comments=True, usebranch=mybranch)
     if cmdargs.resend:
         if cmdargs.resend == 'latest':
             revstr = tracking['series']['revision'] - 1
@@ -1910,7 +1913,8 @@ def cmd_send(cmdargs: argparse.Namespace) -> None:
             prefixes = None
 
         try:
-            todests, ccdests, tag_msg, patches = get_prep_branch_as_patches(prefixes=prefixes)
+            todests, ccdests, tag_msg, patches = get_prep_branch_as_patches(
+                    usebranch=mybranch, prefixes=prefixes)
         except RuntimeError as ex:
             logger.critical('CRITICAL: Failed to convert range to patches: %s', ex)
             sys.exit(1)
@@ -2309,7 +2313,7 @@ def reroll(mybranch: str, tag_msg: str, msgid: str, tagprefix: str = SENT_TAG_PR
     if len(chunks) > 1:
         tag_msg = chunks[0] + '\n'
 
-    cover, tracking = load_cover(strip_comments=True)
+    cover, tracking = load_cover(strip_comments=True, usebranch=mybranch)
     revision = tracking['series']['revision']
     change_id = tracking['series']['change-id']
 
@@ -2358,7 +2362,7 @@ def reroll(mybranch: str, tag_msg: str, msgid: str, tagprefix: str = SENT_TAG_PR
                         logger.critical(out.strip())
                         raise RuntimeError
             elif strategy == 'tip-commit':
-                cover_commit = find_cover_commit()
+                cover_commit = find_cover_commit(usebranch=mybranch)
                 tagcommit = f'{cover_commit}~1'
 
             logger.info('Tagging %s', tagname)
@@ -2376,7 +2380,7 @@ def reroll(mybranch: str, tag_msg: str, msgid: str, tagprefix: str = SENT_TAG_PR
         logger.info('NOTE: Tagname %s already exists', tagname)
 
     logger.info('Recording series message-id in cover letter tracking')
-    cover, tracking = load_cover(strip_comments=False)
+    cover, tracking = load_cover(strip_comments=False, usebranch=mybranch)
     vrev = f'v{revision}'
     if 'history' not in tracking['series']:
         tracking['series']['history'] = dict()
