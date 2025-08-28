@@ -799,9 +799,9 @@ class FRCommitMessageEditor:
             commit.message = self.edit_map[commit.original_id]
 
 
-def edit_cover() -> None:
+def edit_cover(usebranch: Optional[str] = None) -> None:
     is_prep_branch(mustbe=True)
-    cover, tracking = load_cover()
+    cover, tracking = load_cover(usebranch=usebranch)
     bcover = cover.encode()
     new_bcover = b4.edit_in_editor(bcover, filehint='COMMIT_EDITMSG')
     if new_bcover == bcover:
@@ -816,9 +816,9 @@ def edit_cover() -> None:
     logger.info('Cover letter updated.')
 
 
-def edit_deps() -> None:
+def edit_deps(usebranch: Optional[str] = None) -> None:
     is_prep_branch(mustbe=True)
-    cover, tracking = load_cover()
+    cover, tracking = load_cover(usebranch=usebranch)
     prereqs = tracking['series'].get('prerequisites', list())
     deps = '\n'.join(prereqs)
     toedit = f'{deps}\n{DEPS_HELP}'
@@ -846,9 +846,10 @@ def edit_deps() -> None:
     store_cover(cover, tracking)
 
 
-def check_deps(cmdargs: argparse.Namespace) -> None:
+def check_deps(cmdargs: argparse.Namespace,
+               usebranch: Optional[str] = None) -> None:
     is_prep_branch(mustbe=True)
-    cover, tracking = load_cover()
+    cover, tracking = load_cover(usebranch=usebranch)
     prereqs = tracking['series'].get('prerequisites', list())
     if not prereqs:
         logger.info('This series has no defined dependencies.')
@@ -1746,9 +1747,12 @@ def get_sent_tag_as_patches(tagname: str, revision: int) \
     return alltos, allccs, patches
 
 
-def format_patch(output_dir: str) -> None:
+def format_patch(output_dir: str, userbranch: Optional[str] = None) -> None:
     try:
-        _, _, _, patches = get_prep_branch_as_patches(thread=False, movefrom=False, addtracking=False)
+        _, _, _, patches = get_prep_branch_as_patches(thread=False,
+                                                      movefrom=False,
+                                                      addtracking=False,
+                                                      usebranch=userbranch)
     except RuntimeError as ex:
         logger.critical('CRITICAL: Failed to convert range to patches: %s', ex)
         sys.exit(1)
@@ -1789,7 +1793,7 @@ def get_check_cmds() -> Tuple[List[str], List[str]]:
     return ppcmds, scmds
 
 
-def check(cmdargs: argparse.Namespace) -> None:
+def check(cmdargs: argparse.Namespace, usebranch: Optional[str] = None) -> None:
     is_prep_branch(mustbe=True)
     ppcmds, scmds = get_check_cmds()
 
@@ -1798,7 +1802,8 @@ def check(cmdargs: argparse.Namespace) -> None:
         sys.exit(1)
 
     try:
-        _, _, _, patches = get_prep_branch_as_patches(expandprereqs=False)
+        _, _, _, patches = get_prep_branch_as_patches(expandprereqs=False,
+                                                      usebranch=usebranch)
     except RuntimeError as ex:
         logger.critical('CRITICAL: Failed to convert range to patches: %s', ex)
         sys.exit(1)
@@ -2431,8 +2436,8 @@ def check_can_gfr() -> None:
         sys.exit(1)
 
 
-def show_revision() -> None:
-    is_prep_branch(mustbe=True)
+def show_revision(userbranch: Optional[str] = None) -> None:
+    is_prep_branch(mustbe=True, userbranch=userbranch)
     cover, tracking = load_cover()
     ts = tracking['series']
     logger.info('v%s', ts.get('revision'))
@@ -2698,24 +2703,21 @@ def get_info(usebranch: str) -> Dict[str, Union[str, bool, None]]:
     return info
 
 
-def force_revision(forceto: int) -> None:
-    cover, tracking = load_cover()
+def force_revision(forceto: int, usebranch: Optional[str] = None) -> None:
+    cover, tracking = load_cover(usebranch=usebranch)
     tracking['series']['revision'] = forceto
     logger.info('Forced revision to v%s', forceto)
     store_cover(cover, tracking)
 
 
-def range_diff_compare(compareto: str, execvp: bool = True, range_diff_opts: Optional[str] = None) -> Union[str, None]:
+def range_diff_compare(compareto: str, usebranch: Optional[str] = None, execvp: bool = True,
+                       range_diff_opts: Optional[str] = None) -> Union[str, None]:
     _, tracking = load_cover()
     # Try the new format first
     tagname, _ = get_sent_tagname(tracking['series']['change-id'], SENT_TAG_PREFIX, compareto)
     prev_end = b4.git_revparse_tag(None, tagname)
     if not prev_end:
-        mybranch = b4.git_get_current_branch(None)
-        if mybranch is None:
-            logger.critical('CRITICAL: No current branch found')
-            sys.exit(1)
-        tagname, _ = get_sent_tagname(mybranch, SENT_TAG_PREFIX, compareto)
+        tagname, _ = get_sent_tagname(usebranch, SENT_TAG_PREFIX, compareto)
         prev_end = b4.git_revparse_tag(None, tagname)
     if not prev_end:
         logger.critical('CRITICAL: Could not rev-parse %s', tagname)
@@ -2789,7 +2791,7 @@ def get_auto_to_cc_cmds() -> Tuple[List[str], List[str]]:
     return tocmd, cccmd
 
 
-def auto_to_cc() -> None:
+def auto_to_cc(usebranch: Optional[str] = None) -> None:
     config = b4.get_main_config()
     tocmd, cccmd = get_auto_to_cc_cmds()
     if tocmd:
@@ -2798,7 +2800,7 @@ def auto_to_cc() -> None:
         logger.info('Will collect Cc: addresses using %s', os.path.basename(cccmd[0]))
 
     logger.debug('Getting addresses from cover letter')
-    cover, tracking = load_cover(strip_comments=False)
+    cover, tracking = load_cover(strip_comments=False, usebranch=usebranch)
     parts = b4.LoreMessage.get_body_parts(cover)
     seen = set()
     for ltr in parts[2]:
@@ -2895,8 +2897,9 @@ def store_preflight_check(identity: str) -> None:
     b4.save_cache(pf_checks, cacheid, suffix='checks', is_json=True)
 
 
-def set_prefixes(prefixes: List[str], additive: bool = False) -> None:
-    cover, tracking = load_cover()
+def set_prefixes(prefixes: List[str], additive: bool = False,
+                 usebranch: Optional[str] = None) -> None:
+    cover, tracking = load_cover(usebranch=usebranch)
     old_prefixes = tracking['series'].get('prefixes', list())
     if len(prefixes) == 1 and not prefixes[0].strip():
         prefixes = list()
@@ -2928,10 +2931,14 @@ def cmd_prep(cmdargs: argparse.Namespace) -> None:
         logger.critical('          Stash or commit them first.')
         sys.exit(1)
 
+    if cmdargs.branch:
+        mybranch = cmdargs.branch
+    else:
+        mybranch = b4.git_get_current_branch()
+
     if cmdargs.reroll:
         msgid = cmdargs.reroll
         msgs = b4.get_pi_thread_by_msgid(msgid, onlymsgids={msgid}, nocache=True)
-        mybranch = b4.git_get_current_branch(None)
         if not mybranch:
             logger.critical('CRITICAL: No current branch found')
             sys.exit(1)
@@ -2952,19 +2959,29 @@ def cmd_prep(cmdargs: argparse.Namespace) -> None:
         sys.exit(1)
 
     if cmdargs.show_revision:
-        return show_revision()
+        return show_revision(mybranch)
 
     if cmdargs.show_info:
-        return show_info(cmdargs.show_info)
+        if cmdargs.branch:
+            branch = cmdargs.branch
+        else:
+            branch = cmdargs.show_info
+        return show_info(branch)
 
     if cmdargs.cleanup:
-        return cleanup(cmdargs.cleanup)
+        if cmdargs.branch and cmdargs.cleanup != '_show':
+            branch = cmdargs.branch
+        else:
+            branch = cmdargs.cleanup
+        return cleanup(branch)
 
     if cmdargs.format_patch:
-        return format_patch(cmdargs.format_patch)
+        return format_patch(cmdargs.format_patch, cmdargs.branch)
 
     if cmdargs.compare_to:
-        range_diff_compare(cmdargs.compare_to, range_diff_opts=cmdargs.range_diff_opts)
+        range_diff_compare(cmdargs.compare_to,
+                           range_diff_opts=cmdargs.range_diff_opts,
+                           usebranch=mybranch)
         return
 
     if cmdargs.enroll_base and cmdargs.new_series_name:
@@ -2997,25 +3014,25 @@ def cmd_prep(cmdargs: argparse.Namespace) -> None:
         force_revision(cmdargs.force_revision)
 
     if cmdargs.set_prefixes:
-        set_prefixes(cmdargs.set_prefixes)
+        set_prefixes(cmdargs.set_prefixes, usebranch=mybranch)
 
     if cmdargs.add_prefixes:
-        set_prefixes(cmdargs.add_prefixes, additive=True)
+        set_prefixes(cmdargs.add_prefixes, additive=True, usebranch=mybranch)
 
     if cmdargs.auto_to_cc:
-        auto_to_cc()
+        auto_to_cc(usebranch=mybranch)
 
     if cmdargs.edit_cover:
-        return edit_cover()
+        return edit_cover(usebranch=mybranch)
 
     if cmdargs.edit_deps:
-        return edit_deps()
+        return edit_deps(usebranch=mybranch)
 
     if cmdargs.check_deps:
-        return check_deps(cmdargs)
+        return check_deps(cmdargs, usebranch=mybranch)
 
     if cmdargs.check:
-        return check(cmdargs)
+        return check(cmdargs, usebranch=mybranch)
 
 
 def cmd_trailers(cmdargs: argparse.Namespace) -> None:

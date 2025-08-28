@@ -317,6 +317,8 @@ def setup_parser() -> argparse.ArgumentParser:
                          help='Do not use local cache')
     sp_prep.add_argument('--range-diff-opts', default=None, type=str,
                          help='Arguments passed to git range-diff when comparing series')
+    sp_prep.add_argument('--branch', metavar='BRANCH',
+                         help='Use this this branch to work on')
 
     spp_g = sp_prep.add_mutually_exclusive_group()
     spp_g.add_argument('-p', '--format-patch', metavar='OUTPUT_DIR',
